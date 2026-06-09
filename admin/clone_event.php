@@ -12,6 +12,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $event_date = mysqli_real_escape_string($db, $_POST['event_date']);
     $event_time = !empty($_POST['event_time']) ? mysqli_real_escape_string($db, $_POST['event_time']) : null;
     $event_location = mysqli_real_escape_string($db, trim($_POST['event_location'] ?? ''));
+    $current_user_id = (int)$_SESSION['user_id'];
 
     // Gestione cliente
     $client_id = null;
@@ -31,7 +32,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         }
 
         mysqli_query($db, "INSERT INTO clients (company_name, first_name, last_name, email, phone, created_by, created_at) 
-                          VALUES ('$company', '$fname', '$lname', '$email', '$phone', {$_SESSION['user_id']}, NOW())");
+                          VALUES ('$company', '$fname', '$lname', '$email', '$phone', $current_user_id, NOW())");
         $client_id = mysqli_insert_id($db);
     }
 
@@ -66,7 +67,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             event_location, staff_management_status,
             created_at
         ) VALUES (
-            '$new_quote_number', $client_id, {$_SESSION['user_id']}, 'confermato',
+            '$new_quote_number', $client_id, $current_user_id, 'confermato',
             {$source_quote['subtotal']}, '{$source_quote['discount_type']}', {$source_quote['discount_value']}, 
             {$source_quote['total']}, {$source_quote['iva_rate']}, {$source_quote['iva_amount']}, 
             {$source_quote['total_with_iva']},
@@ -77,7 +78,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             NOW()
         )";
 
-        mysqli_query($db, $insert_quote);
+        if (!mysqli_query($db, $insert_quote)) {
+            throw new Exception("Errore creazione preventivo: " . mysqli_error($db));
+        }
         $new_quote_id = mysqli_insert_id($db);
 
         // 2. Clona items (pacchetti)
@@ -99,18 +102,24 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 '$event_date', $time_sql, {$item['graphics_included']}, 0, 0
             )";
 
-            mysqli_query($db, $insert_item);
+            if (!mysqli_query($db, $insert_item)) {
+                throw new Exception("Errore clonazione item: " . mysqli_error($db));
+            }
             $new_item_id = mysqli_insert_id($db);
 
             // Clona servizi item
-            mysqli_query($db, "INSERT INTO quote_item_services (quote_item_id, service_name, is_mandatory, sort_order)
+            if (!mysqli_query($db, "INSERT INTO quote_item_services (quote_item_id, service_name, is_mandatory, sort_order)
                               SELECT $new_item_id, service_name, is_mandatory, sort_order
-                              FROM quote_item_services WHERE quote_item_id = $old_item_id");
+                              FROM quote_item_services WHERE quote_item_id = $old_item_id")) {
+                throw new Exception("Errore clonazione servizi item: " . mysqli_error($db));
+            }
 
             // Clona ruoli item
-            mysqli_query($db, "INSERT INTO quote_item_roles (quote_item_id, role_id, role_name, quantity)
+            if (!mysqli_query($db, "INSERT INTO quote_item_roles (quote_item_id, role_id, role_name, quantity)
                               SELECT $new_item_id, role_id, role_name, quantity
-                              FROM quote_item_roles WHERE quote_item_id = $old_item_id");
+                              FROM quote_item_roles WHERE quote_item_id = $old_item_id")) {
+                throw new Exception("Errore clonazione ruoli item: " . mysqli_error($db));
+            }
         }
 
         // 3. Clona staff assignments (stato "pending")
@@ -119,12 +128,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $quote_item_id = $staff['quote_item_id'] ? $staff['quote_item_id'] : 'NULL';
             $notes = mysqli_real_escape_string($db, $staff['notes']);
 
-            mysqli_query($db, "INSERT INTO quote_staff_assignment (
+            if (!mysqli_query($db, "INSERT INTO quote_staff_assignment (
                 quote_id, quote_item_id, role_id, staff_id, cost, extra, notes, assigned_at, assigned_by
             ) VALUES (
                 $new_quote_id, $quote_item_id, {$staff['role_id']}, {$staff['staff_id']},
-                {$staff['cost']}, {$staff['extra']}, '$notes', NOW(), {$_SESSION['user_id']}
-            )");
+                {$staff['cost']}, {$staff['extra']}, '$notes', NOW(), $current_user_id
+            )")) {
+                throw new Exception("Errore clonazione staff: " . mysqli_error($db));
+            }
         }
 
         // 4. Clona servizi costi
@@ -134,12 +145,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $service_notes = mysqli_real_escape_string($db, $service['notes']);
             $quote_item_id = $service['quote_item_id'] ? $service['quote_item_id'] : 'NULL';
 
-            mysqli_query($db, "INSERT INTO quote_service_costs (
+            if (!mysqli_query($db, "INSERT INTO quote_service_costs (
                 quote_id, quote_item_id, service_name, cost, extra, notes, created_at
             ) VALUES (
                 $new_quote_id, $quote_item_id, '$service_name', {$service['cost']}, {$service['extra']}, 
                 '$service_notes', NOW()
-            )");
+            )")) {
+                throw new Exception("Errore clonazione servizi costi: " . mysqli_error($db));
+            }
         }
 
         mysqli_commit($db);

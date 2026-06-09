@@ -154,13 +154,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         mysqli_query($db, "DELETE FROM quote_staff_assignment WHERE quote_id = $quote_id");
                         mysqli_query($db, "DELETE FROM quote_service_costs WHERE quote_id = $quote_id");
                         // Resetta importi e provvigioni
-                        mysqli_query($db, "UPDATE quotes SET 
+                        if (!mysqli_query($db, "UPDATE quotes SET 
                             invoice_amount = 0, 
                             extra_amount = 0, 
                             commercial_commission = 0, 
                             deposit_amount = 0,
                             staff_management_status = 'pending'
-                            WHERE id = $quote_id");
+                            WHERE id = $quote_id")) {
+                            $error = "Errore nel reset dati staff: " . mysqli_error($db);
+                        }
                     }
                     logQuoteActivity($quote_id, 'status_updated', ['new_status' => $new_status]);
                     header("Location: quotes.php?id=$quote_id&success=status_updated");
