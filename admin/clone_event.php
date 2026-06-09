@@ -90,6 +90,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             throw new Exception("Errore creazione preventivo: " . mysqli_error($db));
         }
         $new_quote_id = mysqli_insert_id($db);
+        $item_id_map = [];
 
         // 2. Clona items (pacchetti)
         $items_result = mysqli_query($db, "SELECT * FROM quote_items WHERE quote_id = $source_quote_id");
@@ -114,6 +115,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 throw new Exception("Errore clonazione item: " . mysqli_error($db));
             }
             $new_item_id = mysqli_insert_id($db);
+            $item_id_map[$old_item_id] = $new_item_id;
 
             // Clona servizi item
             if (!mysqli_query($db, "INSERT INTO quote_item_services (quote_item_id, service_name, is_mandatory, sort_order)
@@ -133,7 +135,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         // 3. Clona staff assignments (stato "pending")
         $staff_result = mysqli_query($db, "SELECT * FROM quote_staff_assignment WHERE quote_id = $source_quote_id");
         while ($staff = mysqli_fetch_assoc($staff_result)) {
-            $quote_item_id = $staff['quote_item_id'] ? $staff['quote_item_id'] : 'NULL';
+            $old_quote_item_id = !empty($staff['quote_item_id']) ? (int)$staff['quote_item_id'] : 0;
+            $new_quote_item_id = ($old_quote_item_id > 0 && isset($item_id_map[$old_quote_item_id])) ? $item_id_map[$old_quote_item_id] : null;
+            $quote_item_id = $new_quote_item_id ? $new_quote_item_id : 'NULL';
             $notes = mysqli_real_escape_string($db, $staff['notes']);
 
             if (!mysqli_query($db, "INSERT INTO quote_staff_assignment (
@@ -151,7 +155,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         while ($service = mysqli_fetch_assoc($services_result)) {
             $service_name = mysqli_real_escape_string($db, $service['service_name']);
             $service_notes = mysqli_real_escape_string($db, $service['notes']);
-            $quote_item_id = $service['quote_item_id'] ? $service['quote_item_id'] : 'NULL';
+            $old_quote_item_id = !empty($service['quote_item_id']) ? (int)$service['quote_item_id'] : 0;
+            $new_quote_item_id = ($old_quote_item_id > 0 && isset($item_id_map[$old_quote_item_id])) ? $item_id_map[$old_quote_item_id] : null;
+            $quote_item_id = $new_quote_item_id ? $new_quote_item_id : 'NULL';
 
             if (!mysqli_query($db, "INSERT INTO quote_service_costs (
                 quote_id, quote_item_id, service_name, cost, extra, notes, created_at
