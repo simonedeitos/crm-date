@@ -258,6 +258,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
 
             mysqli_begin_transaction($db);
             try {
+                // Helper: elimina un file media in modo sicuro (previene path traversal)
+                $safe_unlink = function($file_path) {
+                    $base_dir = realpath(dirname(__DIR__) . '/uploads');
+                    if ($base_dir === false) return;
+                    $real_path = realpath(dirname(__DIR__) . '/' . $file_path);
+                    if ($real_path !== false && strpos($real_path, $base_dir) === 0 && file_exists($real_path)) {
+                        unlink($real_path);
+                    }
+                };
+
                 // Elimina tutti i dati dell'evento clonato
                 $item_ids_res = mysqli_query($db, "SELECT id FROM quote_items WHERE quote_id = $quote_id");
                 while ($item_row = mysqli_fetch_assoc($item_ids_res)) {
@@ -265,9 +275,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
                     // Elimina media files dal filesystem
                     $media_res = mysqli_query($db, "SELECT file_path FROM quote_item_media WHERE quote_item_id = $iid");
                     while ($mrow = mysqli_fetch_assoc($media_res)) {
-                        if (file_exists('../' . $mrow['file_path'])) {
-                            unlink('../' . $mrow['file_path']);
-                        }
+                        $safe_unlink($mrow['file_path']);
                     }
                     mysqli_query($db, "DELETE FROM quote_item_media WHERE quote_item_id = $iid");
                     mysqli_query($db, "DELETE FROM quote_item_services WHERE quote_item_id = $iid");
@@ -286,9 +294,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
                             $iid = (int)$item_row['id'];
                             $media_res = mysqli_query($db, "SELECT file_path FROM quote_item_media WHERE quote_item_id = $iid");
                             while ($mrow = mysqli_fetch_assoc($media_res)) {
-                                if (file_exists('../' . $mrow['file_path'])) {
-                                    unlink('../' . $mrow['file_path']);
-                                }
+                                $safe_unlink($mrow['file_path']);
                             }
                             mysqli_query($db, "DELETE FROM quote_item_media WHERE quote_item_id = $iid");
                             mysqli_query($db, "DELETE FROM quote_item_services WHERE quote_item_id = $iid");
