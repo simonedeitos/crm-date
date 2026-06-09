@@ -100,13 +100,21 @@ $deleteFileIfPresent = function ($relativePath) use ($uploadsRoot) {
         return;
     }
 
-    $fullPath = dirname(__DIR__) . '/' . ltrim($relativePath, '/');
-    $resolvedParent = realpath(dirname($fullPath));
-    if ($resolvedParent === false) {
+    $normalizedRelativePath = ltrim($relativePath, '/');
+    if (strpos($normalizedRelativePath, '..') !== false) {
+        throw new Exception("Percorso file non valido: $relativePath");
+    }
+
+    $fullPath = dirname(__DIR__) . '/' . $normalizedRelativePath;
+    if (!file_exists($fullPath)) {
         return;
     }
 
-    $resolvedPath = $resolvedParent . '/' . basename($fullPath);
+    $resolvedPath = realpath($fullPath);
+    if ($resolvedPath === false) {
+        throw new Exception("Percorso file non valido: $relativePath");
+    }
+
     $uploadsPrefix = rtrim($uploadsRoot, DIRECTORY_SEPARATOR) . DIRECTORY_SEPARATOR;
     $isWithinUploads = ($resolvedPath === $uploadsRoot) || (strpos($resolvedPath, $uploadsPrefix) === 0);
     if (!$isWithinUploads) {

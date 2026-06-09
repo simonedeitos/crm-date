@@ -470,7 +470,7 @@ include '../includes/header.php';
         <a href="assign_staff.php" class="btn btn-outline-secondary"><i class="bi bi-arrow-left"></i> Torna alla lista</a>
         <div class="d-flex gap-2 align-items-center">
             <?php if ($is_cloned_event): ?>
-            <button type="button" class="btn btn-danger" onclick="deleteClonedEvent()">
+            <button type="button" class="btn btn-danger" onclick="deleteClonedEvent()" aria-label="Elimina evento <?php echo e($quote_detail['quote_number']); ?>">
                 <i class="bi bi-trash"></i> Elimina Evento
             </button>
             <?php endif; ?>
@@ -606,7 +606,7 @@ include '../includes/header.php';
                         <i class="bi bi-info-circle"></i> Questo evento è stato clonato dal preventivo
                         <strong><?php echo e($cloned_source_quote_label); ?></strong>
                     </p>
-                    <button type="button" class="btn btn-danger btn-sm w-100" onclick="deleteClonedEvent()">
+                    <button type="button" class="btn btn-danger btn-sm w-100" onclick="deleteClonedEvent()" aria-label="Elimina evento clonato <?php echo e($quote_detail['quote_number']); ?>">
                         <i class="bi bi-trash"></i> Elimina Evento
                     </button>
                 </div>
@@ -990,7 +990,7 @@ include '../includes/header.php';
                 <form method="POST" action="delete_cloned_event.php" id="deleteClonedEventForm">
                     <input type="hidden" name="quote_id" value="<?php echo $quote_id; ?>">
                     <div class="modal-body">
-                        <div class="alert alert-danger" id="deleteClonedEventWarning">
+                        <div class="alert alert-danger" id="deleteClonedEventWarning" role="alert">
                             <i class="bi bi-exclamation-triangle"></i>
                             <strong>ATTENZIONE: Questa azione eliminerà l'evento e tutti i dati associati!</strong>
                         </div>
