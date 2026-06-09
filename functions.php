@@ -234,7 +234,8 @@ function getStatusBadge($status) {
     $badges = [
         'inviato' => 'secondary',
         'accettato' => 'warning',
-        'confermato' => 'success'
+        'confermato' => 'success',
+        'rifiutato' => 'danger'
     ];
     
     $color = $badges[$status] ?? 'secondary';
@@ -244,7 +245,8 @@ function getStatusBadge($status) {
     $icons = [
         'inviato' => '📤',
         'accettato' => '✅',
-        'confermato' => '🎉'
+        'confermato' => '🎉',
+        'rifiutato' => '❌'
     ];
     $icon = $icons[$status] ?? '';
     

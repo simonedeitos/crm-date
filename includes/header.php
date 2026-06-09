@@ -57,9 +57,13 @@ $isAdminUser = isAdmin();
                             <i class="bi bi-download"></i> Materiali
                         </a>
                     </li>
-                                        
                     
                     <?php if ($isAdminUser): ?>
+                    <li class="nav-item">
+                        <a class="nav-link" href="<?php echo BASE_URL; ?>/admin/assign_staff.php">
+                            <i class="bi bi-clipboard-check"></i> Assegna Staff
+                        </a>
+                    </li>
                     <li class="nav-item dropdown">
                         <a class="nav-link dropdown-toggle" href="#" id="adminDropdown" role="button" data-bs-toggle="dropdown">
                             <i class="bi bi-gear"></i> Amministrazione
@@ -78,9 +82,6 @@ $isAdminUser = isAdmin();
                                 <i class="bi bi-person-circle"></i> Utenti
                             </a></li>
                             <li><hr class="dropdown-divider"></li>
-                            <li><a class="dropdown-item" href="<?php echo BASE_URL; ?>/admin/assign_staff.php">
-                                <i class="bi bi-clipboard-check"></i> Assegna Staff
-                            </a></li>
                             <li><a class="dropdown-item" href="<?php echo BASE_URL; ?>/admin/formats.php">
                                 <i class="bi bi-folder-fill"></i> Gestione Materiali
                             </a></li>
