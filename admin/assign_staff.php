@@ -326,6 +326,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
 $quote_detail = null;
 $is_cloned_event = false;
 $cloned_source_quote_number = null;
+$quote_client_name = '';
 if (isset($_GET['quote_id'])) {
     $quote_id = (int)$_GET['quote_id'];
     $query = "SELECT q.*, c.company_name, c.first_name, c.last_name, c.phone, c.address, u.username as commercial_name, u.id as commercial_id FROM quotes q JOIN clients c ON q.client_id = c.id JOIN users u ON q.created_by = u.id WHERE q.id = $quote_id AND q.status = 'confermato'";
@@ -339,6 +340,7 @@ if (isset($_GET['quote_id'])) {
                 $cloned_source_quote_number = $source['quote_number'];
             }
         }
+        $quote_client_name = $quote_detail['company_name'] ?: trim($quote_detail['first_name'] . ' ' . $quote_detail['last_name']);
         $quote_detail['no_commission'] = $quote_detail['no_commission'] ?? 0;
         if ($quote_detail['commercial_commission'] == 0 && $quote_detail['no_commission'] == 0) {
             $calc_res = mysqli_query($db, "SELECT SUM(p.commission) as total_comm FROM quote_items qi JOIN packages p ON qi.package_id = p.id WHERE qi.quote_id = $quote_id");
@@ -984,7 +986,7 @@ include '../includes/header.php';
                         <p>Stai per eliminare l'evento clonato:</p>
                         <div class="bg-light p-3 rounded mb-3">
                             <strong><?php echo e($quote_detail['quote_number']); ?></strong><br>
-                            Cliente: <?php $client_name = $quote_detail['company_name'] ?: trim($quote_detail['first_name'] . ' ' . $quote_detail['last_name']); echo e($client_name); ?><br>
+                            Cliente: <?php echo e($quote_client_name); ?><br>
                             Totale: <?php echo formatPrice($quote_detail['total_with_iva']); ?>
                         </div>
 

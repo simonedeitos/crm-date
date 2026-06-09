@@ -20,64 +20,120 @@ if ($quote_id <= 0 || !in_array($quote_action, ['delete', 'reject'], true)) {
     exit;
 }
 
-$check_query = mysqli_query($db, "SELECT id, cloned_from FROM quotes WHERE id = $quote_id");
-$check = $check_query ? mysqli_fetch_assoc($check_query) : null;
+$check_stmt = mysqli_prepare($db, 'SELECT id, cloned_from FROM quotes WHERE id = ?');
+if ($check_stmt === false) {
+    header('Location: assign_staff.php?error=delete_failed');
+    exit;
+}
+
+mysqli_stmt_bind_param($check_stmt, 'i', $quote_id);
+mysqli_stmt_execute($check_stmt);
+$check_result = mysqli_stmt_get_result($check_stmt);
+$check = $check_result ? mysqli_fetch_assoc($check_result) : null;
+if ($check_result) {
+    mysqli_free_result($check_result);
+}
+mysqli_stmt_close($check_stmt);
 
 if (!$check || empty($check['cloned_from'])) {
     header('Location: assign_staff.php?error=not_cloned');
     exit;
 }
 
-$runQuery = function ($sql, $errorMessage) use ($db) {
-    $result = mysqli_query($db, $sql);
-    if ($result === false) {
+$fetchRows = function ($sql, $types, $params, $errorMessage) use ($db) {
+    $stmt = mysqli_prepare($db, $sql);
+    if ($stmt === false) {
         throw new Exception($errorMessage . ': ' . mysqli_error($db));
     }
 
-    return $result;
+    if ($types !== '' && !mysqli_stmt_bind_param($stmt, $types, ...$params)) {
+        $prepareError = mysqli_stmt_error($stmt);
+        mysqli_stmt_close($stmt);
+        throw new Exception($errorMessage . ': ' . $prepareError);
+    }
+
+    if (!mysqli_stmt_execute($stmt)) {
+        $executeError = mysqli_stmt_error($stmt);
+        mysqli_stmt_close($stmt);
+        throw new Exception($errorMessage . ': ' . $executeError);
+    }
+
+    $result = mysqli_stmt_get_result($stmt);
+    $rows = [];
+    if ($result !== false) {
+        while ($row = mysqli_fetch_assoc($result)) {
+            $rows[] = $row;
+        }
+        mysqli_free_result($result);
+    }
+
+    mysqli_stmt_close($stmt);
+
+    return $rows;
+};
+
+$runStatement = function ($sql, $types, $params, $errorMessage) use ($db) {
+    $stmt = mysqli_prepare($db, $sql);
+    if ($stmt === false) {
+        throw new Exception($errorMessage . ': ' . mysqli_error($db));
+    }
+
+    if ($types !== '' && !mysqli_stmt_bind_param($stmt, $types, ...$params)) {
+        $prepareError = mysqli_stmt_error($stmt);
+        mysqli_stmt_close($stmt);
+        throw new Exception($errorMessage . ': ' . $prepareError);
+    }
+
+    if (!mysqli_stmt_execute($stmt)) {
+        $executeError = mysqli_stmt_error($stmt);
+        mysqli_stmt_close($stmt);
+        throw new Exception($errorMessage . ': ' . $executeError);
+    }
+
+    mysqli_stmt_close($stmt);
 };
 
 $deleteFileIfPresent = function ($relativePath) {
     $fullPath = dirname(__DIR__) . '/' . ltrim($relativePath, '/');
-    if ($relativePath && file_exists($fullPath)) {
-        @unlink($fullPath);
+    if ($relativePath && file_exists($fullPath) && !unlink($fullPath)) {
+        throw new Exception('Errore eliminazione file associato all\'evento');
     }
 };
 
 mysqli_begin_transaction($db);
 
 try {
-    $items_result = $runQuery("SELECT id FROM quote_items WHERE quote_id = $quote_id", 'Errore caricamento items evento');
-    while ($item = mysqli_fetch_assoc($items_result)) {
+    $items = $fetchRows('SELECT id FROM quote_items WHERE quote_id = ?', 'i', [$quote_id], 'Errore caricamento items evento');
+    foreach ($items as $item) {
         $item_id = (int)$item['id'];
 
-        $media_result = $runQuery("SELECT file_path FROM quote_item_media WHERE quote_item_id = $item_id", 'Errore caricamento media evento');
-        while ($media = mysqli_fetch_assoc($media_result)) {
+        $mediaFiles = $fetchRows('SELECT file_path FROM quote_item_media WHERE quote_item_id = ?', 'i', [$item_id], 'Errore caricamento media evento');
+        foreach ($mediaFiles as $media) {
             $deleteFileIfPresent($media['file_path']);
         }
 
-        $runQuery("DELETE FROM quote_item_media WHERE quote_item_id = $item_id", 'Errore eliminazione media evento');
-        $runQuery("DELETE FROM quote_item_services WHERE quote_item_id = $item_id", 'Errore eliminazione servizi item');
-        $runQuery("DELETE FROM quote_item_roles WHERE quote_item_id = $item_id", 'Errore eliminazione ruoli item');
+        $runStatement('DELETE FROM quote_item_media WHERE quote_item_id = ?', 'i', [$item_id], 'Errore eliminazione media evento');
+        $runStatement('DELETE FROM quote_item_services WHERE quote_item_id = ?', 'i', [$item_id], 'Errore eliminazione servizi item');
+        $runStatement('DELETE FROM quote_item_roles WHERE quote_item_id = ?', 'i', [$item_id], 'Errore eliminazione ruoli item');
     }
 
-    $attachments_result = $runQuery("SELECT file_path FROM quote_attachments WHERE quote_id = $quote_id", 'Errore caricamento allegati preventivo');
-    while ($attachment = mysqli_fetch_assoc($attachments_result)) {
+    $attachments = $fetchRows('SELECT file_path FROM quote_attachments WHERE quote_id = ?', 'i', [$quote_id], 'Errore caricamento allegati preventivo');
+    foreach ($attachments as $attachment) {
         $deleteFileIfPresent($attachment['file_path']);
     }
 
-    $runQuery("DELETE FROM quote_items WHERE quote_id = $quote_id", 'Errore eliminazione items evento');
-    $runQuery("DELETE FROM quote_dates WHERE quote_id = $quote_id", 'Errore eliminazione date evento');
-    $runQuery("DELETE FROM quote_staff_assignment WHERE quote_id = $quote_id", 'Errore eliminazione staff evento');
-    $runQuery("DELETE FROM quote_service_costs WHERE quote_id = $quote_id", 'Errore eliminazione costi servizi');
-    $runQuery("DELETE FROM quote_attachments WHERE quote_id = $quote_id", 'Errore eliminazione allegati preventivo');
-    $runQuery("DELETE FROM quote_history WHERE quote_id = $quote_id", 'Errore eliminazione storico preventivo');
+    $runStatement('DELETE FROM quote_items WHERE quote_id = ?', 'i', [$quote_id], 'Errore eliminazione items evento');
+    $runStatement('DELETE FROM quote_dates WHERE quote_id = ?', 'i', [$quote_id], 'Errore eliminazione date evento');
+    $runStatement('DELETE FROM quote_staff_assignment WHERE quote_id = ?', 'i', [$quote_id], 'Errore eliminazione staff evento');
+    $runStatement('DELETE FROM quote_service_costs WHERE quote_id = ?', 'i', [$quote_id], 'Errore eliminazione costi servizi');
+    $runStatement('DELETE FROM quote_attachments WHERE quote_id = ?', 'i', [$quote_id], 'Errore eliminazione allegati preventivo');
+    $runStatement('DELETE FROM quote_history WHERE quote_id = ?', 'i', [$quote_id], 'Errore eliminazione storico preventivo');
 
     if ($quote_action === 'delete') {
-        $runQuery("DELETE FROM quotes WHERE id = $quote_id", 'Errore eliminazione preventivo');
+        $runStatement('DELETE FROM quotes WHERE id = ?', 'i', [$quote_id], 'Errore eliminazione preventivo');
         $success_msg = 'event_and_quote_deleted';
     } else {
-        $runQuery("UPDATE quotes SET status = 'rifiutato' WHERE id = $quote_id", 'Errore aggiornamento stato preventivo');
+        $runStatement("UPDATE quotes SET status = 'rifiutato' WHERE id = ?", 'i', [$quote_id], 'Errore aggiornamento stato preventivo');
         $success_msg = 'event_deleted_quote_rejected';
     }
 

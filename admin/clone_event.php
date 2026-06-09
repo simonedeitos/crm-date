@@ -132,12 +132,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             }
         }
 
+        $mapQuoteItemId = function ($oldQuoteItemId) use (&$item_id_map) {
+            $oldQuoteItemId = (int)$oldQuoteItemId;
+            return ($oldQuoteItemId > 0 && isset($item_id_map[$oldQuoteItemId])) ? $item_id_map[$oldQuoteItemId] : 'NULL';
+        };
+
         // 3. Clona staff assignments (stato "pending")
         $staff_result = mysqli_query($db, "SELECT * FROM quote_staff_assignment WHERE quote_id = $source_quote_id");
         while ($staff = mysqli_fetch_assoc($staff_result)) {
-            $old_quote_item_id = !empty($staff['quote_item_id']) ? (int)$staff['quote_item_id'] : 0;
-            $new_quote_item_id = ($old_quote_item_id > 0 && isset($item_id_map[$old_quote_item_id])) ? $item_id_map[$old_quote_item_id] : null;
-            $quote_item_id = $new_quote_item_id ? $new_quote_item_id : 'NULL';
+            $quote_item_id = $mapQuoteItemId($staff['quote_item_id'] ?? null);
             $notes = mysqli_real_escape_string($db, $staff['notes']);
 
             if (!mysqli_query($db, "INSERT INTO quote_staff_assignment (
@@ -155,9 +158,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         while ($service = mysqli_fetch_assoc($services_result)) {
             $service_name = mysqli_real_escape_string($db, $service['service_name']);
             $service_notes = mysqli_real_escape_string($db, $service['notes']);
-            $old_quote_item_id = !empty($service['quote_item_id']) ? (int)$service['quote_item_id'] : 0;
-            $new_quote_item_id = ($old_quote_item_id > 0 && isset($item_id_map[$old_quote_item_id])) ? $item_id_map[$old_quote_item_id] : null;
-            $quote_item_id = $new_quote_item_id ? $new_quote_item_id : 'NULL';
+            $quote_item_id = $mapQuoteItemId($service['quote_item_id'] ?? null);
 
             if (!mysqli_query($db, "INSERT INTO quote_service_costs (
                 quote_id, quote_item_id, service_name, cost, extra, notes, created_at
