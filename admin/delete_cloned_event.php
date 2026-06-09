@@ -107,7 +107,9 @@ $deleteFileIfPresent = function ($relativePath) use ($uploadsRoot) {
     }
 
     $resolvedPath = $resolvedParent . '/' . basename($fullPath);
-    if (strpos($resolvedPath, $uploadsRoot . DIRECTORY_SEPARATOR) !== 0 && $resolvedPath !== $uploadsRoot) {
+    $uploadsPrefix = rtrim($uploadsRoot, DIRECTORY_SEPARATOR) . DIRECTORY_SEPARATOR;
+    $isWithinUploads = ($resolvedPath === $uploadsRoot) || (strpos($resolvedPath, $uploadsPrefix) === 0);
+    if (!$isWithinUploads) {
         throw new Exception("Percorso file non valido: $relativePath");
     }
 
