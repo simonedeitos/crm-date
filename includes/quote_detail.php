@@ -412,6 +412,7 @@ small { font-size: 0.75rem !important; }
                                 <option value="confermato" <?php echo $quote['status'] == 'confermato' ? 'selected' : ''; ?>>
                                     Confermato
                                 </option>
+                                <option value="rifiutato" <?php echo $quote['status'] == 'rifiutato' ? 'selected' : ''; ?>>Rifiutato</option>
                             </select>
                             <button type="submit" class="btn btn-success"><i class="bi bi-check"></i></button>
                         </div>
