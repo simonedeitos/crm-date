@@ -336,9 +336,19 @@ if (isset($_GET['quote_id'])) {
     if ($quote_detail) {
         $is_cloned_event = !empty($quote_detail['cloned_from']);
         if ($is_cloned_event) {
-            $source_res = mysqli_query($db, "SELECT quote_number FROM quotes WHERE id = " . (int)$quote_detail['cloned_from']);
-            if ($source_res && $source = mysqli_fetch_assoc($source_res)) {
-                $cloned_source_quote_number = $source['quote_number'];
+            $source_quote_id = (int)$quote_detail['cloned_from'];
+            $source_stmt = mysqli_prepare($db, 'SELECT quote_number FROM quotes WHERE id = ?');
+            if ($source_stmt) {
+                mysqli_stmt_bind_param($source_stmt, 'i', $source_quote_id);
+                mysqli_stmt_execute($source_stmt);
+                $source_res = mysqli_stmt_get_result($source_stmt);
+                if ($source_res && $source = mysqli_fetch_assoc($source_res)) {
+                    $cloned_source_quote_number = $source['quote_number'];
+                }
+                if ($source_res) {
+                    mysqli_free_result($source_res);
+                }
+                mysqli_stmt_close($source_stmt);
             }
             $cloned_source_quote_label = $cloned_source_quote_number ?: ('#' . $quote_detail['cloned_from']);
         }
@@ -980,7 +990,7 @@ include '../includes/header.php';
                 <form method="POST" action="delete_cloned_event.php" id="deleteClonedEventForm">
                     <input type="hidden" name="quote_id" value="<?php echo $quote_id; ?>">
                     <div class="modal-body">
-                        <div class="alert alert-danger">
+                        <div class="alert alert-danger" id="deleteClonedEventWarning">
                             <i class="bi bi-exclamation-triangle"></i>
                             <strong>ATTENZIONE: Questa azione eliminerà l'evento e tutti i dati associati!</strong>
                         </div>
@@ -1013,7 +1023,7 @@ include '../includes/header.php';
                         </div>
 
                         <div class="form-check">
-                            <input class="form-check-input" type="checkbox" id="confirmDeleteCloned" required>
+                            <input class="form-check-input" type="checkbox" id="confirmDeleteCloned" aria-describedby="deleteClonedEventWarning" required>
                             <label class="form-check-label text-danger" for="confirmDeleteCloned">
                                 <strong>Confermo di voler eliminare questo evento</strong>
                             </label>

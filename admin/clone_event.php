@@ -134,19 +134,20 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
         $mapQuoteItemId = function ($oldQuoteItemId) use (&$item_id_map) {
             $oldQuoteItemId = (int)$oldQuoteItemId;
-            return ($oldQuoteItemId > 0 && isset($item_id_map[$oldQuoteItemId])) ? $item_id_map[$oldQuoteItemId] : 'NULL';
+            return ($oldQuoteItemId > 0 && isset($item_id_map[$oldQuoteItemId])) ? $item_id_map[$oldQuoteItemId] : null;
         };
 
         // 3. Clona staff assignments (stato "pending")
         $staff_result = mysqli_query($db, "SELECT * FROM quote_staff_assignment WHERE quote_id = $source_quote_id");
         while ($staff = mysqli_fetch_assoc($staff_result)) {
             $quote_item_id = $mapQuoteItemId($staff['quote_item_id'] ?? null);
+            $quote_item_id_sql = $quote_item_id !== null ? $quote_item_id : 'NULL';
             $notes = mysqli_real_escape_string($db, $staff['notes']);
 
             if (!mysqli_query($db, "INSERT INTO quote_staff_assignment (
                 quote_id, quote_item_id, role_id, staff_id, cost, extra, notes, assigned_at, assigned_by
             ) VALUES (
-                $new_quote_id, $quote_item_id, {$staff['role_id']}, {$staff['staff_id']},
+                $new_quote_id, $quote_item_id_sql, {$staff['role_id']}, {$staff['staff_id']},
                 {$staff['cost']}, {$staff['extra']}, '$notes', NOW(), $current_user_id
             )")) {
                 throw new Exception("Errore clonazione staff: " . mysqli_error($db));
@@ -159,11 +160,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $service_name = mysqli_real_escape_string($db, $service['service_name']);
             $service_notes = mysqli_real_escape_string($db, $service['notes']);
             $quote_item_id = $mapQuoteItemId($service['quote_item_id'] ?? null);
+            $quote_item_id_sql = $quote_item_id !== null ? $quote_item_id : 'NULL';
 
             if (!mysqli_query($db, "INSERT INTO quote_service_costs (
                 quote_id, quote_item_id, service_name, cost, extra, notes, created_at
             ) VALUES (
-                $new_quote_id, $quote_item_id, '$service_name', {$service['cost']}, {$service['extra']}, 
+                $new_quote_id, $quote_item_id_sql, '$service_name', {$service['cost']}, {$service['extra']}, 
                 '$service_notes', NOW()
             )")) {
                 throw new Exception("Errore clonazione servizi costi: " . mysqli_error($db));

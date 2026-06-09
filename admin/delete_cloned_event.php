@@ -93,12 +93,28 @@ $runStatement = function ($sql, $types, $params, $errorMessage) use ($db) {
     mysqli_stmt_close($stmt);
 };
 
-$deleteFileIfPresent = function ($relativePath) {
+$uploadsRoot = realpath(dirname(__DIR__) . '/uploads');
+
+$deleteFileIfPresent = function ($relativePath) use ($uploadsRoot) {
+    if (empty($relativePath) || $uploadsRoot === false) {
+        return;
+    }
+
     $fullPath = dirname(__DIR__) . '/' . ltrim($relativePath, '/');
-    if ($relativePath && file_exists($fullPath) && !unlink($fullPath)) {
+    $resolvedParent = realpath(dirname($fullPath));
+    if ($resolvedParent === false) {
+        return;
+    }
+
+    $resolvedPath = $resolvedParent . '/' . basename($fullPath);
+    if (strpos($resolvedPath, $uploadsRoot . DIRECTORY_SEPARATOR) !== 0 && $resolvedPath !== $uploadsRoot) {
+        throw new Exception("Percorso file non valido: $relativePath");
+    }
+
+    if (file_exists($resolvedPath) && !unlink($resolvedPath)) {
         $lastError = error_get_last();
         $errorDetails = isset($lastError['message']) ? ' - ' . $lastError['message'] : '';
-        throw new Exception("Errore eliminazione file associato all'evento: $fullPath$errorDetails");
+        throw new Exception("Errore eliminazione file associato all'evento: $resolvedPath$errorDetails");
     }
 };
 
