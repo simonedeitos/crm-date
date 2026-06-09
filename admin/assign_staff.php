@@ -326,6 +326,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
 $quote_detail = null;
 $is_cloned_event = false;
 $cloned_source_quote_number = null;
+$cloned_source_quote_label = '';
 $quote_client_name = '';
 if (isset($_GET['quote_id'])) {
     $quote_id = (int)$_GET['quote_id'];
@@ -339,6 +340,7 @@ if (isset($_GET['quote_id'])) {
             if ($source_res && $source = mysqli_fetch_assoc($source_res)) {
                 $cloned_source_quote_number = $source['quote_number'];
             }
+            $cloned_source_quote_label = $cloned_source_quote_number ?: ('#' . $quote_detail['cloned_from']);
         }
         $quote_client_name = $quote_detail['company_name'] ?: trim($quote_detail['first_name'] . ' ' . $quote_detail['last_name']);
         $quote_detail['no_commission'] = $quote_detail['no_commission'] ?? 0;
@@ -592,7 +594,7 @@ include '../includes/header.php';
                 <div class="card-body">
                     <p class="small text-muted mb-2">
                         <i class="bi bi-info-circle"></i> Questo evento è stato clonato dal preventivo
-                        <strong><?php echo e($cloned_source_quote_number ?: ('#' . $quote_detail['cloned_from'])); ?></strong>
+                        <strong><?php echo e($cloned_source_quote_label); ?></strong>
                     </p>
                     <button type="button" class="btn btn-danger btn-sm w-100" onclick="deleteClonedEvent()">
                         <i class="bi bi-trash"></i> Elimina Evento

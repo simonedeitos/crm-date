@@ -96,7 +96,9 @@ $runStatement = function ($sql, $types, $params, $errorMessage) use ($db) {
 $deleteFileIfPresent = function ($relativePath) {
     $fullPath = dirname(__DIR__) . '/' . ltrim($relativePath, '/');
     if ($relativePath && file_exists($fullPath) && !unlink($fullPath)) {
-        throw new Exception('Errore eliminazione file associato all\'evento');
+        $lastError = error_get_last();
+        $errorDetails = isset($lastError['message']) ? ' - ' . $lastError['message'] : '';
+        throw new Exception("Errore eliminazione file associato all'evento: $fullPath$errorDetails");
     }
 };
 
