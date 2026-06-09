@@ -45,6 +45,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         exit;
     }
 
+    // Assicura che la colonna cloned_from esista sulla tabella quotes
+    $cols = mysqli_query($db, "SHOW COLUMNS FROM quotes LIKE 'cloned_from'");
+    if (mysqli_num_rows($cols) === 0) {
+        mysqli_query($db, "ALTER TABLE quotes ADD COLUMN cloned_from INT NULL DEFAULT NULL");
+    }
+
     mysqli_begin_transaction($db);
 
     try {
@@ -65,6 +71,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             commercial_commission, commission_type,
             deposit_amount, deposit_type,
             event_location, staff_management_status,
+            cloned_from,
             created_at
         ) VALUES (
             '$new_quote_number', $client_id, $current_user_id, 'confermato',
@@ -75,6 +82,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $commercial_commission, '$commission_type',
             $deposit_amount, '$deposit_type',
             '$event_location', 'pending',
+            $source_quote_id,
             NOW()
         )";
 
