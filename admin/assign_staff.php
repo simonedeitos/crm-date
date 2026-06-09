@@ -15,6 +15,16 @@ $db = getDBConnection();
 $error = '';
 $success = '';
 
+// Gestione errori provenienti da redirect
+if (isset($_GET['error'])) {
+    $error_map = [
+        'client_required' => 'Cliente obbligatorio: seleziona un cliente esistente o inserisci i dati del nuovo cliente.',
+        'quote_not_found' => 'Preventivo originale non trovato.',
+        'clone_failed' => 'Errore durante la clonazione dell\'evento. Riprova.',
+    ];
+    $error = $error_map[$_GET['error']] ?? 'Errore imprevisto.';
+}
+
 // GESTIONE POST
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
     $action = $_POST['action'];
@@ -290,6 +300,8 @@ if (isset($_GET['quote_id'])) {
     }
 }
 $quotes_to_assign = [];
+$show_past = isset($_GET['show_past']) ? true : false;
+$five_days_ago = date('Y-m-d', strtotime('-5 days'));
 $query = "SELECT 
               q.*, 
               c.company_name, c.first_name, c.last_name,
@@ -302,9 +314,11 @@ $query = "SELECT
           JOIN 
               clients c ON q.client_id = c.id 
           WHERE 
-              q.status = 'confermato' 
-          ORDER BY 
-              first_event_date ASC";
+              q.status = 'confermato'";
+if (!$show_past) {
+    $query .= " AND (SELECT MIN(event_date) FROM quote_items WHERE quote_id = q.id AND event_date IS NOT NULL) >= '$five_days_ago'";
+}
+$query .= " ORDER BY first_event_date ASC";
 $result = mysqli_query($db, $query);
 if ($result) while ($row = mysqli_fetch_assoc($result)) $quotes_to_assign[] = $row;
 $all_roles = [];
@@ -338,7 +352,7 @@ include '../includes/header.php';
     <?php endif; ?>
     
     <?php if (isset($_GET['success'])): ?>
-        <div class="alert alert-success alert-dismissible fade show"><i class="bi bi-check-circle"></i> <?php switch ($_GET['success']) { case 'staff_assigned': echo '✅ SALVATO!'; break; case 'amounts': echo '✅ Importi salvati!'; break; case 'commission': echo '✅ Provvigione salvata!'; break; case 'deposit': echo '✅ Acconto salvato!'; break; case 'status': echo '✅ Stato aggiornato!'; break; case 'notes': echo '✅ Note salvate!'; break; case 'graphics': echo '✅ Stato grafiche aggiornato!'; break; case 'media_uploaded': echo '✅ File caricato!'; break; case 'media_deleted': echo '✅ File eliminato!'; break; default: echo '✅ Operazione completata!'; } ?><button type="button" class="btn-close" data-bs-dismiss="alert"></button></div>
+        <div class="alert alert-success alert-dismissible fade show"><i class="bi bi-check-circle"></i> <?php switch ($_GET['success']) { case 'staff_assigned': echo '✅ SALVATO!'; break; case 'amounts': echo '✅ Importi salvati!'; break; case 'commission': echo '✅ Provvigione salvata!'; break; case 'deposit': echo '✅ Acconto salvato!'; break; case 'status': echo '✅ Stato aggiornato!'; break; case 'notes': echo '✅ Note salvate!'; break; case 'graphics': echo '✅ Stato grafiche aggiornato!'; break; case 'media_uploaded': echo '✅ File caricato!'; break; case 'media_deleted': echo '✅ File eliminato!'; break; case 'event_cloned': echo '✅ Evento clonato con successo!'; break; default: echo '✅ Operazione completata!'; } ?><button type="button" class="btn-close" data-bs-dismiss="alert"></button></div>
     <?php endif; ?>
     
     <?php if ($quote_detail): ?>
@@ -681,6 +695,18 @@ include '../includes/header.php';
     </div>
         
     <?php else: ?>
+    <div class="mb-3 d-flex justify-content-between align-items-center">
+        <h5 class="mb-0">Preventivi Confermati da Gestire</h5>
+        <?php if (!$show_past): ?>
+        <a href="?show_past=1" class="btn btn-outline-secondary">
+            <i class="bi bi-calendar-check"></i> Mostra Eventi Passati
+        </a>
+        <?php else: ?>
+        <a href="?" class="btn btn-secondary">
+            <i class="bi bi-calendar-x"></i> Nascondi Eventi Passati
+        </a>
+        <?php endif; ?>
+    </div>
     <div class="card">
         <div class="card-header bg-primary text-white"><h5 class="mb-0">Preventivi Confermati da Gestire</h5></div>
         <div class="card-body">
@@ -691,7 +717,19 @@ include '../includes/header.php';
                     <tbody>
                         <?php foreach ($quotes_to_assign as $quote): $client_name = $quote['company_name'] ?: trim($quote['first_name'] . ' ' . $quote['last_name']); $is_completed = ($quote['staff_management_status'] ?? 'pending') == 'completed'; ?>
                         <tr class="<?php echo $is_completed ? 'table-success' : ''; ?>">
-                            <td><strong><?php echo e($quote['quote_number']); ?></strong></td><td><?php echo e($client_name); ?></td><td><?php echo $quote['first_event_date'] ? formatDate($quote['first_event_date']) : '-'; ?></td><td><?php echo formatPrice($quote['final_total']); ?></td><td><?php echo $is_completed ? '<span class="badge bg-success">COMPLETATO</span>' : '<span class="badge bg-warning text-dark">DA COMPLETARE</span>'; ?></td><td><a href="?quote_id=<?php echo $quote['id']; ?>" class="btn btn-sm btn-primary"><i class="bi bi-pencil-square"></i> Gestisci</a></td>
+                            <td><strong><?php echo e($quote['quote_number']); ?></strong></td><td><?php echo e($client_name); ?></td><td><?php echo $quote['first_event_date'] ? formatDate($quote['first_event_date']) : '-'; ?></td><td><?php echo formatPrice($quote['final_total']); ?></td><td><?php echo $is_completed ? '<span class="badge bg-success">COMPLETATO</span>' : '<span class="badge bg-warning text-dark">DA COMPLETARE</span>'; ?></td>
+                            <td class="text-end">
+                                <button type="button" class="btn btn-sm btn-outline-primary" 
+                                        data-bs-toggle="modal" 
+                                        data-bs-target="#cloneModal<?php echo $quote['id']; ?>"
+                                        title="Clona Evento">
+                                    <i class="bi bi-clipboard-plus"></i>
+                                </button>
+                                <a href="?quote_id=<?php echo $quote['id']; ?>" 
+                                   class="btn btn-sm btn-<?php echo $is_completed ? 'success' : 'warning'; ?>">
+                                    <i class="bi bi-pencil"></i> Edit
+                                </a>
+                            </td>
                         </tr>
                         <?php endforeach; ?>
                     </tbody>
@@ -700,6 +738,116 @@ include '../includes/header.php';
             <?php endif; ?>
         </div>
     </div>
+    
+    <!-- Modali Clona Evento -->
+    <?php foreach ($quotes_to_assign as $quote): ?>
+    <div class="modal fade" id="cloneModal<?php echo $quote['id']; ?>" tabindex="-1">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header bg-primary text-white">
+                    <h5 class="modal-title">
+                        <i class="bi bi-clipboard-plus"></i> Clona Evento: <?php echo e($quote['quote_number']); ?>
+                    </h5>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                </div>
+                <form method="POST" action="clone_event.php">
+                    <input type="hidden" name="source_quote_id" value="<?php echo $quote['id']; ?>">
+                    <div class="modal-body">
+                        <div class="alert alert-info">
+                            <i class="bi bi-info-circle"></i> 
+                            L'evento verrà clonato con lo stesso staff, servizi, importi e provvigioni.
+                            Lo stato staff sarà impostato su "Da Completare".
+                        </div>
+                        
+                        <ul class="nav nav-tabs mb-3" role="tablist">
+                            <li class="nav-item">
+                                <button class="nav-link active" data-bs-toggle="tab" data-bs-target="#existingClient<?php echo $quote['id']; ?>" type="button">
+                                    Cliente Esistente
+                                </button>
+                            </li>
+                            <li class="nav-item">
+                                <button class="nav-link" data-bs-toggle="tab" data-bs-target="#newClient<?php echo $quote['id']; ?>" type="button">
+                                    Nuovo Cliente
+                                </button>
+                            </li>
+                        </ul>
+                        
+                        <div class="tab-content">
+                            <!-- Tab Cliente Esistente -->
+                            <div class="tab-pane fade show active" id="existingClient<?php echo $quote['id']; ?>">
+                                <div class="mb-3">
+                                    <label class="form-label fw-bold">Seleziona Cliente *</label>
+                                    <select name="client_id" class="form-select">
+                                        <option value="">-- Scegli --</option>
+                                        <?php
+                                        $clients_result = mysqli_query($db, "SELECT * FROM clients ORDER BY company_name, last_name");
+                                        while ($client = mysqli_fetch_assoc($clients_result)):
+                                            $client_name = $client['company_name'] ?: trim($client['first_name'] . ' ' . $client['last_name']);
+                                        ?>
+                                        <option value="<?php echo $client['id']; ?>"><?php echo e($client_name); ?></option>
+                                        <?php endwhile; ?>
+                                    </select>
+                                </div>
+                            </div>
+                            
+                            <!-- Tab Nuovo Cliente -->
+                            <div class="tab-pane fade" id="newClient<?php echo $quote['id']; ?>">
+                                <div class="mb-2">
+                                    <label class="form-label fw-bold">Azienda</label>
+                                    <input type="text" name="new_company_name" class="form-control" placeholder="Nome azienda">
+                                </div>
+                                <div class="row">
+                                    <div class="col-6 mb-2">
+                                        <label class="form-label fw-bold">Nome</label>
+                                        <input type="text" name="new_first_name" class="form-control">
+                                    </div>
+                                    <div class="col-6 mb-2">
+                                        <label class="form-label fw-bold">Cognome</label>
+                                        <input type="text" name="new_last_name" class="form-control">
+                                    </div>
+                                </div>
+                                <div class="row">
+                                    <div class="col-6 mb-2">
+                                        <label class="form-label">Email</label>
+                                        <input type="email" name="new_email" class="form-control">
+                                    </div>
+                                    <div class="col-6 mb-2">
+                                        <label class="form-label">Telefono</label>
+                                        <input type="text" name="new_phone" class="form-control">
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <hr>
+                        
+                        <div class="mb-3">
+                            <label class="form-label fw-bold">Data Evento *</label>
+                            <input type="date" name="event_date" class="form-control" required>
+                        </div>
+                        
+                        <div class="mb-3">
+                            <label class="form-label">Ora Evento</label>
+                            <input type="time" name="event_time" class="form-control">
+                        </div>
+                        
+                        <div class="mb-3">
+                            <label class="form-label">Location</label>
+                            <input type="text" name="event_location" class="form-control" placeholder="Es: Milano, Via Roma 123">
+                        </div>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Annulla</button>
+                        <button type="submit" class="btn btn-primary">
+                            <i class="bi bi-clipboard-plus"></i> Clona Evento
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+    <?php endforeach; ?>
+    
     <?php endif; ?>
 </div>
 

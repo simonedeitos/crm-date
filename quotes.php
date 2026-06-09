@@ -149,6 +149,19 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     if ($new_status === 'confermato' && $q_data['status'] !== 'confermato') {
                         // Logica aggiuntiva per stato confermato (es. notifica admin)
                     }
+                    if ($new_status === 'rifiutato') {
+                        // Svuota tutti i dati di assegnazione staff
+                        mysqli_query($db, "DELETE FROM quote_staff_assignment WHERE quote_id = $quote_id");
+                        mysqli_query($db, "DELETE FROM quote_service_costs WHERE quote_id = $quote_id");
+                        // Resetta importi e provvigioni
+                        mysqli_query($db, "UPDATE quotes SET 
+                            invoice_amount = 0, 
+                            extra_amount = 0, 
+                            commercial_commission = 0, 
+                            deposit_amount = 0,
+                            staff_management_status = 'pending'
+                            WHERE id = $quote_id");
+                    }
                     logQuoteActivity($quote_id, 'status_updated', ['new_status' => $new_status]);
                     header("Location: quotes.php?id=$quote_id&success=status_updated");
                     exit;
@@ -929,16 +942,21 @@ if (isset($_GET['id'])) {
                         <label class="form-label small mb-1">Stato</label>
                         <select class="form-select form-select-sm" name="status">
                             <option value="">Tutti</option>
+                            <option value="bozza" <?php echo $filter_status == 'bozza' ? 'selected' : ''; ?>>Bozza</option>
                             <option value="inviato" <?php echo $filter_status == 'inviato' ? 'selected' : ''; ?>>Inviato</option>
                             <option value="accettato" <?php echo $filter_status == 'accettato' ? 'selected' : ''; ?>>Accettato</option>
                             <option value="confermato" <?php echo $filter_status == 'confermato' ? 'selected' : ''; ?>>Confermato</option>
+                            <option value="rifiutato" <?php echo $filter_status == 'rifiutato' ? 'selected' : ''; ?>>Rifiutato</option>
                         </select>
                     </div>
                     <div class="col-md-4">
                         <button type="submit" class="btn btn-sm btn-secondary me-1">
                             <i class="bi bi-search"></i> Cerca
                         </button>
-                        <a href="quotes.php" class="btn btn-sm btn-outline-secondary">Reset</a>
+                        <a href="quotes.php" class="btn btn-sm btn-outline-secondary me-1">Reset</a>
+                        <button type="button" class="btn btn-sm btn-outline-danger" id="toggleInviatiBtn" onclick="toggleInviati()">
+                            <i class="bi bi-eye-slash"></i> Nascondi Inviati
+                        </button>
                     </div>
                 </form>
             </div>
@@ -1126,6 +1144,31 @@ if (isset($_GET['id'])) {
     });
     </script>
     <?php endif; ?>
+    
+    <script>
+    let hideInviati = false;
+
+    function toggleInviati() {
+        hideInviati = !hideInviati;
+        const btn = document.getElementById('toggleInviatiBtn');
+        const rows = document.querySelectorAll('tbody tr');
+        
+        rows.forEach(row => {
+            const badge = row.querySelector('.badge');
+            if (badge && badge.textContent.includes('Inviato')) {
+                row.style.display = hideInviati ? 'none' : '';
+            }
+        });
+        
+        if (hideInviati) {
+            btn.className = 'btn btn-sm btn-danger';
+            btn.innerHTML = '<i class="bi bi-eye"></i> Mostra Inviati';
+        } else {
+            btn.className = 'btn btn-sm btn-outline-danger';
+            btn.innerHTML = '<i class="bi bi-eye-slash"></i> Nascondi Inviati';
+        }
+    }
+    </script>
     
     <?php
     include 'includes/footer.php';
