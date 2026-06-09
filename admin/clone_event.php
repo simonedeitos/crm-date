@@ -90,6 +90,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             throw new Exception("Errore creazione preventivo: " . mysqli_error($db));
         }
         $new_quote_id = mysqli_insert_id($db);
+        
+        // Mappa vecchio_item_id => nuovo_item_id per correggere riferimenti
+        $item_id_map = [];
 
         // 2. Clona items (pacchetti)
         $items_result = mysqli_query($db, "SELECT * FROM quote_items WHERE quote_id = $source_quote_id");
@@ -114,6 +117,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 throw new Exception("Errore clonazione item: " . mysqli_error($db));
             }
             $new_item_id = mysqli_insert_id($db);
+            
+            // Salva mappatura vecchio => nuovo
+            $item_id_map[$old_item_id] = $new_item_id;
 
             // Clona servizi item
             if (!mysqli_query($db, "INSERT INTO quote_item_services (quote_item_id, service_name, is_mandatory, sort_order)
@@ -133,13 +139,21 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         // 3. Clona staff assignments (stato "pending")
         $staff_result = mysqli_query($db, "SELECT * FROM quote_staff_assignment WHERE quote_id = $source_quote_id");
         while ($staff = mysqli_fetch_assoc($staff_result)) {
-            $quote_item_id = $staff['quote_item_id'] ? $staff['quote_item_id'] : 'NULL';
+            // Mappa il vecchio quote_item_id al nuovo usando $item_id_map
+            $old_quote_item_id = $staff['quote_item_id'];
+            $new_quote_item_id_mapped = null;
+            
+            if ($old_quote_item_id && isset($item_id_map[$old_quote_item_id])) {
+                $new_quote_item_id_mapped = (int)$item_id_map[$old_quote_item_id];
+            }
+            
+            $quote_item_id_sql = $new_quote_item_id_mapped ? $new_quote_item_id_mapped : 'NULL';
             $notes = mysqli_real_escape_string($db, $staff['notes']);
 
             if (!mysqli_query($db, "INSERT INTO quote_staff_assignment (
                 quote_id, quote_item_id, role_id, staff_id, cost, extra, notes, assigned_at, assigned_by
             ) VALUES (
-                $new_quote_id, $quote_item_id, {$staff['role_id']}, {$staff['staff_id']},
+                $new_quote_id, $quote_item_id_sql, {$staff['role_id']}, {$staff['staff_id']},
                 {$staff['cost']}, {$staff['extra']}, '$notes', NOW(), $current_user_id
             )")) {
                 throw new Exception("Errore clonazione staff: " . mysqli_error($db));
@@ -151,12 +165,21 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         while ($service = mysqli_fetch_assoc($services_result)) {
             $service_name = mysqli_real_escape_string($db, $service['service_name']);
             $service_notes = mysqli_real_escape_string($db, $service['notes']);
-            $quote_item_id = $service['quote_item_id'] ? $service['quote_item_id'] : 'NULL';
+            
+            // Mappa il vecchio quote_item_id al nuovo
+            $old_service_item_id = $service['quote_item_id'];
+            $new_service_item_id_mapped = null;
+            
+            if ($old_service_item_id && isset($item_id_map[$old_service_item_id])) {
+                $new_service_item_id_mapped = (int)$item_id_map[$old_service_item_id];
+            }
+            
+            $quote_item_id_sql = $new_service_item_id_mapped ? $new_service_item_id_mapped : 'NULL';
 
             if (!mysqli_query($db, "INSERT INTO quote_service_costs (
                 quote_id, quote_item_id, service_name, cost, extra, notes, created_at
             ) VALUES (
-                $new_quote_id, $quote_item_id, '$service_name', {$service['cost']}, {$service['extra']}, 
+                $new_quote_id, $quote_item_id_sql, '$service_name', {$service['cost']}, {$service['extra']}, 
                 '$service_notes', NOW()
             )")) {
                 throw new Exception("Errore clonazione servizi costi: " . mysqli_error($db));

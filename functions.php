@@ -232,6 +232,7 @@ function logQuoteActivity($quote_id, $action, $changes = null) {
  */
 function getStatusBadge($status) {
     $badges = [
+        'bozza' => 'secondary',
         'inviato' => 'secondary',
         'accettato' => 'warning',
         'confermato' => 'success',
@@ -243,12 +244,13 @@ function getStatusBadge($status) {
     
     // Aggiungi emoji
     $icons = [
+        'bozza' => '📝',
         'inviato' => '📤',
         'accettato' => '✅',
         'confermato' => '🎉',
         'rifiutato' => '❌'
     ];
-    $icon = $icons[$status] ?? '';
+    $icon = $icons[$status] ?? '❓';
     
     return '<span class="badge bg-' . $color . '">' . $icon . ' ' . $label . '</span>';
 }
