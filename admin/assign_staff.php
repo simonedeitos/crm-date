@@ -27,6 +27,7 @@ if (isset($_GET['error'])) {
         'client_required' => 'Cliente obbligatorio: seleziona un cliente esistente o inserisci i dati del nuovo cliente.',
         'quote_not_found' => 'Preventivo originale non trovato.',
         'clone_failed' => 'Errore durante la clonazione dell\'evento. Riprova.',
+        'not_cloned' => 'Impossibile eliminare: questo non è un evento clonato.',
         'event_not_found' => 'Evento non trovato o già eliminato.',
         'delete_failed' => 'Errore durante l\'eliminazione dell\'evento. Riprova.',
     ];
@@ -244,77 +245,92 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
 
         case 'delete_event':
             $quote_id = (int)$_POST['quote_id'];
-            $quote_action = $_POST['quote_action'] ?? ''; // 'delete' or 'rifiutato'
+            $quote_action = $_POST['quote_action'] ?? ''; // 'delete' or 'reject'
 
-            // Carica il preventivo da eliminare
-            $q_res = mysqli_query($db, "SELECT id, cloned_from FROM quotes WHERE id = $quote_id AND status = 'confermato'");
-            $q_row = mysqli_fetch_assoc($q_res);
-            if (!$q_row) {
+            if (!in_array($quote_action, ['delete', 'reject'], true)) {
+                header("Location: assign_staff.php?quote_id=$quote_id&error=delete_failed");
+                exit;
+            }
+
+            $check_query = mysqli_query($db, "SELECT cloned_from FROM quotes WHERE id = $quote_id");
+            $check = $check_query ? mysqli_fetch_assoc($check_query) : null;
+            if (!$check_query || !$check) {
                 header("Location: assign_staff.php?error=event_not_found");
                 exit;
             }
 
-            $cloned_from = (int)($q_row['cloned_from'] ?? 0);
+            if (empty($check['cloned_from'])) {
+                header("Location: assign_staff.php?quote_id=$quote_id&error=not_cloned");
+                exit;
+            }
 
             mysqli_begin_transaction($db);
             try {
-                // Helper: elimina un file media in modo sicuro (previene path traversal)
+                $run_query = function($sql) use ($db) {
+                    $result = mysqli_query($db, $sql);
+                    if ($result === false) {
+                        throw new Exception(mysqli_error($db));
+                    }
+                    return $result;
+                };
+
                 $safe_unlink = function($file_path) {
+                    if (empty($file_path)) return;
                     $base_dir = realpath(dirname(__DIR__) . '/uploads');
                     if ($base_dir === false) return;
-                    $real_path = realpath(dirname(__DIR__) . '/' . $file_path);
+                    $real_path = realpath(dirname(__DIR__) . '/' . ltrim($file_path, '/'));
                     if ($real_path !== false && strpos($real_path, $base_dir) === 0 && file_exists($real_path)) {
-                        unlink($real_path);
+                        @unlink($real_path);
                     }
                 };
 
-                // Elimina tutti i dati dell'evento clonato
-                $item_ids_res = mysqli_query($db, "SELECT id FROM quote_items WHERE quote_id = $quote_id");
-                while ($item_row = mysqli_fetch_assoc($item_ids_res)) {
-                    $iid = (int)$item_row['id'];
-                    // Elimina media files dal filesystem
-                    $media_res = mysqli_query($db, "SELECT file_path FROM quote_item_media WHERE quote_item_id = $iid");
-                    while ($mrow = mysqli_fetch_assoc($media_res)) {
-                        $safe_unlink($mrow['file_path']);
-                    }
-                    mysqli_query($db, "DELETE FROM quote_item_media WHERE quote_item_id = $iid");
-                    mysqli_query($db, "DELETE FROM quote_item_services WHERE quote_item_id = $iid");
-                    mysqli_query($db, "DELETE FROM quote_item_roles WHERE quote_item_id = $iid");
-                }
-                mysqli_query($db, "DELETE FROM quote_items WHERE quote_id = $quote_id");
-                mysqli_query($db, "DELETE FROM quote_staff_assignment WHERE quote_id = $quote_id");
-                mysqli_query($db, "DELETE FROM quote_service_costs WHERE quote_id = $quote_id");
-                mysqli_query($db, "DELETE FROM quotes WHERE id = $quote_id");
+                $delete_quote_data = function($target_quote_id) use ($run_query, $safe_unlink) {
+                    $target_quote_id = (int)$target_quote_id;
 
-                // Gestione preventivo sorgente (solo se era un clone)
-                if ($cloned_from > 0 && in_array($quote_action, ['delete', 'rifiutato'])) {
-                    if ($quote_action === 'delete') {
-                        $src_item_ids_res = mysqli_query($db, "SELECT id FROM quote_items WHERE quote_id = $cloned_from");
-                        while ($item_row = mysqli_fetch_assoc($src_item_ids_res)) {
-                            $iid = (int)$item_row['id'];
-                            $media_res = mysqli_query($db, "SELECT file_path FROM quote_item_media WHERE quote_item_id = $iid");
-                            while ($mrow = mysqli_fetch_assoc($media_res)) {
-                                $safe_unlink($mrow['file_path']);
-                            }
-                            mysqli_query($db, "DELETE FROM quote_item_media WHERE quote_item_id = $iid");
-                            mysqli_query($db, "DELETE FROM quote_item_services WHERE quote_item_id = $iid");
-                            mysqli_query($db, "DELETE FROM quote_item_roles WHERE quote_item_id = $iid");
+                    $items_result = $run_query("SELECT id FROM quote_items WHERE quote_id = $target_quote_id");
+                    while ($item = mysqli_fetch_assoc($items_result)) {
+                        $item_id = (int)$item['id'];
+                        $run_query("DELETE FROM quote_item_services WHERE quote_item_id = $item_id");
+                        $run_query("DELETE FROM quote_item_roles WHERE quote_item_id = $item_id");
+
+                        $media_res = $run_query("SELECT file_path FROM quote_item_media WHERE quote_item_id = $item_id");
+                        while ($media = mysqli_fetch_assoc($media_res)) {
+                            $safe_unlink($media['file_path']);
                         }
-                        mysqli_query($db, "DELETE FROM quote_items WHERE quote_id = $cloned_from");
-                        mysqli_query($db, "DELETE FROM quote_staff_assignment WHERE quote_id = $cloned_from");
-                        mysqli_query($db, "DELETE FROM quote_service_costs WHERE quote_id = $cloned_from");
-                        mysqli_query($db, "DELETE FROM quotes WHERE id = $cloned_from");
-                    } else {
-                        mysqli_query($db, "UPDATE quotes SET status = 'rifiutato' WHERE id = $cloned_from");
+                        $run_query("DELETE FROM quote_item_media WHERE quote_item_id = $item_id");
                     }
+
+                    $run_query("DELETE FROM quote_items WHERE quote_id = $target_quote_id");
+                    $run_query("DELETE FROM quote_staff_assignment WHERE quote_id = $target_quote_id");
+                    $run_query("DELETE FROM quote_service_costs WHERE quote_id = $target_quote_id");
+
+                    $att_result = $run_query("SELECT file_path FROM quote_attachments WHERE quote_id = $target_quote_id");
+                    while ($att = mysqli_fetch_assoc($att_result)) {
+                        $safe_unlink($att['file_path']);
+                    }
+                    $run_query("DELETE FROM quote_attachments WHERE quote_id = $target_quote_id");
+                    $run_query("DELETE FROM quote_history WHERE quote_id = $target_quote_id");
+                    $run_query("DELETE FROM quote_dates WHERE quote_id = $target_quote_id");
+                    $run_query("DELETE FROM quotes WHERE id = $target_quote_id");
+                };
+
+                $cloned_from_id = (int)$check['cloned_from'];
+                if ($quote_action === 'delete') {
+                    $delete_quote_data($cloned_from_id);
+                    $success_msg = 'event_and_quote_deleted';
+                } else {
+                    $run_query("UPDATE quotes SET status = 'rifiutato' WHERE id = $cloned_from_id");
+                    $success_msg = 'event_deleted_quote_rejected';
                 }
+
+                $delete_quote_data($quote_id);
 
                 mysqli_commit($db);
-                header("Location: assign_staff.php?success=event_deleted");
+                header("Location: assign_staff.php?success=$success_msg");
                 exit;
             } catch (Exception $e) {
                 mysqli_rollback($db);
-                header("Location: assign_staff.php?error=delete_failed");
+                header("Location: assign_staff.php?quote_id=$quote_id&error=delete_failed");
                 exit;
             }
             break;
@@ -437,7 +453,7 @@ include '../includes/header.php';
     <?php endif; ?>
     
     <?php if (isset($_GET['success'])): ?>
-        <div class="alert alert-success alert-dismissible fade show"><i class="bi bi-check-circle"></i> <?php switch ($_GET['success']) { case 'staff_assigned': echo '✅ SALVATO!'; break; case 'amounts': echo '✅ Importi salvati!'; break; case 'commission': echo '✅ Provvigione salvata!'; break; case 'deposit': echo '✅ Acconto salvato!'; break; case 'status': echo '✅ Stato aggiornato!'; break; case 'notes': echo '✅ Note salvate!'; break; case 'graphics': echo '✅ Stato grafiche aggiornato!'; break; case 'media_uploaded': echo '✅ File caricato!'; break; case 'media_deleted': echo '✅ File eliminato!'; break; case 'event_cloned': echo '✅ Evento clonato con successo!'; break; case 'event_deleted': echo '✅ Evento eliminato con successo!'; break; default: echo '✅ Operazione completata!'; } ?><button type="button" class="btn-close" data-bs-dismiss="alert"></button></div>
+        <div class="alert alert-success alert-dismissible fade show"><i class="bi bi-check-circle"></i> <?php switch ($_GET['success']) { case 'staff_assigned': echo '✅ SALVATO!'; break; case 'amounts': echo '✅ Importi salvati!'; break; case 'commission': echo '✅ Provvigione salvata!'; break; case 'deposit': echo '✅ Acconto salvato!'; break; case 'status': echo '✅ Stato aggiornato!'; break; case 'notes': echo '✅ Note salvate!'; break; case 'graphics': echo '✅ Stato grafiche aggiornato!'; break; case 'media_uploaded': echo '✅ File caricato!'; break; case 'media_deleted': echo '✅ File eliminato!'; break; case 'event_cloned': echo '✅ Evento clonato con successo!'; break; case 'event_deleted': echo '✅ Evento eliminato con successo!'; break; case 'event_and_quote_deleted': echo '✅ Evento e preventivo eliminati con successo'; break; case 'event_deleted_quote_rejected': echo '✅ Evento eliminato, preventivo impostato come rifiutato'; break; default: echo '✅ Operazione completata!'; } ?><button type="button" class="btn-close" data-bs-dismiss="alert"></button></div>
     <?php endif; ?>
     
     <?php if ($quote_detail): ?>
@@ -941,77 +957,57 @@ include '../includes/header.php';
     <?php endforeach; ?>
     
     <?php if ($quote_detail && !empty($quote_detail['cloned_from'])): ?>
-    <!-- Modal Elimina Evento (step 1: conferma eliminazione) -->
     <div class="modal fade" id="deleteEventModal" tabindex="-1" data-bs-backdrop="static">
         <div class="modal-dialog">
             <div class="modal-content">
                 <div class="modal-header bg-danger text-white">
-                    <h5 class="modal-title"><i class="bi bi-trash"></i> Elimina Evento</h5>
+                    <h5 class="modal-title">⚠️ Conferma Eliminazione Evento</h5>
                     <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
                 </div>
-                <div class="modal-body">
-                    <div class="alert alert-warning">
-                        <i class="bi bi-exclamation-triangle"></i>
-                        <strong>Attenzione!</strong> Stai per eliminare l'evento <strong><?php echo e($quote_detail['quote_number']); ?></strong>.
-                        Questa operazione è irreversibile.
-                    </div>
-                    <p>Sei sicuro di voler eliminare questo evento?</p>
-                </div>
-                <div class="modal-footer">
-                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Annulla</button>
-                    <button type="button" class="btn btn-danger" id="confirmDeleteBtn">
-                        <i class="bi bi-trash"></i> Sì, Elimina Evento
-                    </button>
-                </div>
-            </div>
-        </div>
-    </div>
-
-    <!-- Modal Elimina Evento (step 2: gestione preventivo sorgente) -->
-    <div class="modal fade" id="deleteQuoteActionModal" tabindex="-1" data-bs-backdrop="static">
-        <div class="modal-dialog">
-            <div class="modal-content">
-                <div class="modal-header bg-danger text-white">
-                    <h5 class="modal-title"><i class="bi bi-question-circle"></i> Gestione Preventivo Associato</h5>
-                </div>
-                <div class="modal-body">
-                    <div class="alert alert-info">
-                        <i class="bi bi-info-circle"></i>
-                        Questo evento è stato creato clonando un preventivo esistente.
-                        Cosa vuoi fare con il <strong>preventivo sorgente</strong> associato?
-                    </div>
-                    <form id="deleteEventForm" method="POST" action="assign_staff.php">
-                        <input type="hidden" name="action" value="delete_event">
-                        <input type="hidden" name="quote_id" value="<?php echo $quote_id; ?>">
-                        <input type="hidden" name="quote_action" id="quoteActionInput" value="">
-                        <div class="d-grid gap-2">
-                            <button type="button" class="btn btn-danger btn-lg" onclick="submitDeleteWithAction('delete')">
-                                <i class="bi bi-trash"></i> Elimina anche il preventivo associato
-                            </button>
-                            <button type="button" class="btn btn-warning btn-lg" onclick="submitDeleteWithAction('rifiutato')">
-                                <i class="bi bi-x-circle"></i> Metti il preventivo in stato <strong>Rifiutato</strong>
-                            </button>
-                            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Annulla</button>
+                <form method="POST" action="assign_staff.php">
+                    <input type="hidden" name="action" value="delete_event">
+                    <input type="hidden" name="quote_id" value="<?php echo $quote_id; ?>">
+                    <div class="modal-body">
+                        <div class="alert alert-warning">
+                            <i class="bi bi-exclamation-triangle"></i>
+                            <strong>Attenzione!</strong> Questa operazione è irreversibile e rimuoverà definitivamente l'evento clonato.
                         </div>
-                    </form>
-                </div>
+                        <div class="border rounded p-3 bg-light mb-3">
+                            <div><strong>Numero preventivo:</strong> <?php echo e($quote_detail['quote_number']); ?></div>
+                            <div><strong>Cliente:</strong> <?php echo e($quote_detail['company_name'] ?: trim(($quote_detail['first_name'] ?? '') . ' ' . ($quote_detail['last_name'] ?? ''))); ?></div>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label fw-bold">Gestione preventivo associato</label>
+                            <div class="form-check mb-2">
+                                <input class="form-check-input" type="radio" name="quote_action" id="deleteQuoteActionDelete" value="delete" checked>
+                                <label class="form-check-label" for="deleteQuoteActionDelete">
+                                    <strong>Elimina anche il preventivo</strong>
+                                </label>
+                            </div>
+                            <div class="form-check">
+                                <input class="form-check-input" type="radio" name="quote_action" id="deleteQuoteActionReject" value="reject">
+                                <label class="form-check-label" for="deleteQuoteActionReject">
+                                    <strong>Imposta preventivo come "Rifiutato"</strong>
+                                </label>
+                            </div>
+                        </div>
+                        <div class="form-check">
+                            <input class="form-check-input" type="checkbox" id="confirmDeleteCloned" required>
+                            <label class="form-check-label fw-bold" for="confirmDeleteCloned">
+                                Confermo di voler eliminare questo evento
+                            </label>
+                        </div>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Annulla</button>
+                        <button type="submit" class="btn btn-danger" id="confirmDeleteClonedBtn" disabled>
+                            <i class="bi bi-trash"></i> Elimina Evento
+                        </button>
+                    </div>
+                </form>
             </div>
         </div>
     </div>
-
-    <script>
-    document.getElementById('confirmDeleteBtn').addEventListener('click', function() {
-        var deleteModal = bootstrap.Modal.getInstance(document.getElementById('deleteEventModal'));
-        deleteModal.hide();
-        var actionModal = new bootstrap.Modal(document.getElementById('deleteQuoteActionModal'));
-        actionModal.show();
-    });
-
-    function submitDeleteWithAction(action) {
-        document.getElementById('quoteActionInput').value = action;
-        document.getElementById('deleteEventForm').submit();
-    }
-    </script>
     <?php endif; ?>
 
     <?php endif; ?>
@@ -1106,10 +1102,17 @@ document.addEventListener('DOMContentLoaded', function() {
     const noCommCheck = document.getElementById('noCommissionCheck');
     const commInput = document.getElementById('commissionInput');
     const commType = document.getElementById('commissionTypeSelect');
+    const confirmCheck = document.getElementById('confirmDeleteCloned');
+    const confirmBtn = document.getElementById('confirmDeleteClonedBtn');
     if(noCommCheck) {
         noCommCheck.addEventListener('change', function() {
             if(this.checked) { commInput.disabled = true; commType.disabled = true; commInput.value = '0.00'; } 
             else { commInput.disabled = false; commType.disabled = false; }
+        });
+    }
+    if (confirmCheck && confirmBtn) {
+        confirmCheck.addEventListener('change', function() {
+            confirmBtn.disabled = !this.checked;
         });
     }
     document.querySelectorAll('input[name*="[cost]"], input[name*="[extra]"]').forEach(input => {
