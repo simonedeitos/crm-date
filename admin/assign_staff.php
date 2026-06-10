@@ -470,8 +470,10 @@ include '../includes/header.php';
 
                 <!-- BOTTONE ELIMINA EVENTO -->
                 <?php if ($is_cloned): ?>
-                <button type="button" class="btn btn-danger"
-                        onclick="openDeleteModal(<?php echo $quote_id; ?>, '<?php echo e($quote_detail['quote_number']); ?>', '<?php echo e($quote_detail['company_name'] ?: trim(($quote_detail['first_name'] ?? '') . ' ' . ($quote_detail['last_name'] ?? ''))); ?>')">
+                <button type="button" class="btn btn-danger" id="deleteEventBtn"
+                        data-quote-id="<?php echo $quote_id; ?>"
+                        data-quote-number="<?php echo e($quote_detail['quote_number']); ?>"
+                        data-client-name="<?php echo e($quote_detail['company_name'] ?: trim(($quote_detail['first_name'] ?? '') . ' ' . ($quote_detail['last_name'] ?? ''))); ?>">
                     <i class="bi bi-trash"></i> Elimina Evento
                 </button>
                 <?php endif; ?>
@@ -1156,6 +1158,18 @@ function openDeleteModal(quoteId, quoteNumber, clientName) {
 }
 
 document.addEventListener('DOMContentLoaded', function() {
+    // Bottone elimina evento: legge i dati dagli attributi data-*
+    const deleteEventBtn = document.getElementById('deleteEventBtn');
+    if (deleteEventBtn) {
+        deleteEventBtn.addEventListener('click', function() {
+            openDeleteModal(
+                this.dataset.quoteId,
+                this.dataset.quoteNumber,
+                this.dataset.clientName
+            );
+        });
+    }
+
     // Checkbox conferma eliminazione
     const confirmDeleteCheck = document.getElementById('confirmDeleteCheck');
     const confirmDeleteBtn = document.getElementById('confirmDeleteBtn');
@@ -1165,7 +1179,7 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     }
 
-    // Reset stato modal all'apertura tramite bootstrap
+    // Reset stato modal alla chiusura
     const deleteEventModal = document.getElementById('deleteEventModal');
     if (deleteEventModal) {
         deleteEventModal.addEventListener('hidden.bs.modal', function() {
