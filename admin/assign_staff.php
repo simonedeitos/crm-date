@@ -245,7 +245,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
 
         case 'delete_event':
             $quote_id = (int)$_POST['quote_id'];
-            $quote_action = $_POST['quote_action'] ?? ''; // 'delete' or 'reject'
+            $quote_action = $_POST['quote_action'] ?? ''; // form values: 'delete' or 'reject' ('reject' maps to DB status 'rifiutato')
 
             if (!in_array($quote_action, ['delete', 'reject'], true)) {
                 header("Location: assign_staff.php?quote_id=$quote_id&error=delete_failed");
