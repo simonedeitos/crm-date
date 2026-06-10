@@ -286,8 +286,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
                     if (empty($file_path)) return;
                     $base_dir = realpath(dirname(__DIR__) . '/uploads');
                     if ($base_dir === false) return;
-                    $relative_path = str_replace('\\', '/', ltrim((string)$file_path, '/'));
-                    $relative_path = rawurldecode($relative_path);
+                    $relative_path = ltrim((string)$file_path, '/');
+                    for ($i = 0; $i < 3; $i++) {
+                        $decoded_path = rawurldecode($relative_path);
+                        if ($decoded_path === $relative_path) {
+                            break;
+                        }
+                        $relative_path = $decoded_path;
+                    }
+                    $relative_path = str_replace('\\', '/', $relative_path);
                     if (strpos($relative_path, "\0") !== false || preg_match('#(^|/)\.\.(/|$)#', $relative_path)) {
                         return;
                     }
@@ -468,7 +475,7 @@ include '../includes/header.php';
     <?php endif; ?>
     
     <?php if (isset($_GET['success'])): ?>
-        <div class="alert alert-success alert-dismissible fade show"><i class="bi bi-check-circle"></i> <?php switch ($_GET['success']) { case 'staff_assigned': echo '✅ SALVATO!'; break; case 'amounts': echo '✅ Importi salvati!'; break; case 'commission': echo '✅ Provvigione salvata!'; break; case 'deposit': echo '✅ Acconto salvato!'; break; case 'status': echo '✅ Stato aggiornato!'; break; case 'notes': echo '✅ Note salvate!'; break; case 'graphics': echo '✅ Stato grafiche aggiornato!'; break; case 'media_uploaded': echo '✅ File caricato!'; break; case 'media_deleted': echo '✅ File eliminato!'; break; case 'event_cloned': echo '✅ Evento clonato con successo!'; break; case 'event_deleted': echo '✅ Evento eliminato con successo!'; break; case 'event_and_original_deleted': echo '✅ Evento e preventivo originale eliminati'; break; case 'event_deleted_original_rejected': echo '✅ Evento eliminato, preventivo impostato come rifiutato'; break; case 'event_and_quote_deleted': echo '✅ Evento e preventivo eliminati con successo'; break; case 'event_deleted_quote_rejected': echo '✅ Evento eliminato, preventivo impostato come rifiutato'; break; default: echo '✅ Operazione completata!'; } ?><button type="button" class="btn-close" data-bs-dismiss="alert"></button></div>
+        <div class="alert alert-success alert-dismissible fade show"><i class="bi bi-check-circle"></i> <?php switch ($_GET['success']) { case 'staff_assigned': echo '✅ SALVATO!'; break; case 'amounts': echo '✅ Importi salvati!'; break; case 'commission': echo '✅ Provvigione salvata!'; break; case 'deposit': echo '✅ Acconto salvato!'; break; case 'status': echo '✅ Stato aggiornato!'; break; case 'notes': echo '✅ Note salvate!'; break; case 'graphics': echo '✅ Stato grafiche aggiornato!'; break; case 'media_uploaded': echo '✅ File caricato!'; break; case 'media_deleted': echo '✅ File eliminato!'; break; case 'event_cloned': echo '✅ Evento clonato con successo!'; break; case 'event_deleted': echo '✅ Evento eliminato con successo!'; break; case 'event_and_original_deleted': echo '✅ Evento e preventivo originale eliminati'; break; case 'event_deleted_original_rejected': echo '✅ Evento eliminato, preventivo impostato come rifiutato'; break; /* backward compatibility with old redirect codes */ case 'event_and_quote_deleted': echo '✅ Evento e preventivo eliminati con successo'; break; case 'event_deleted_quote_rejected': echo '✅ Evento eliminato, preventivo impostato come rifiutato'; break; default: echo '✅ Operazione completata!'; } ?><button type="button" class="btn-close" data-bs-dismiss="alert"></button></div>
     <?php endif; ?>
     
     <?php if ($quote_detail): ?>
