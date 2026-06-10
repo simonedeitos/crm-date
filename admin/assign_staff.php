@@ -1034,7 +1034,7 @@ include '../includes/header.php';
                         <p class="fw-bold mb-2">Cosa vuoi fare con il preventivo originale?</p>
 
                         <div class="form-check mb-2">
-                            <input class="form-check-input" type="radio" name="quote_action" id="quoteActionDelete" value="delete" required checked>
+                            <input class="form-check-input" type="radio" name="quote_action" id="quoteActionDelete" value="delete" checked>
                             <label class="form-check-label" for="quoteActionDelete">
                                 <strong><i class="bi bi-trash text-danger"></i> Elimina anche il preventivo</strong><br>
                                 <small class="text-muted">Il preventivo verrà cancellato definitivamente dal database</small>
@@ -1165,9 +1165,9 @@ async function uploadMedia(e, quoteItemId, quoteId) {
 // GESTIONE MODAL ELIMINA EVENTO
 // ============================================
 let deleteEventContext = {
-    quoteId: '<?php echo isset($quote_id) ? (int)$quote_id : 0; ?>',
-    quoteNumber: '<?php echo isset($quote_detail['quote_number']) ? e($quote_detail['quote_number']) : ''; ?>',
-    clientName: '<?php echo isset($quote_detail) ? e($quote_detail['company_name'] ?: trim(($quote_detail['first_name'] ?? '') . ' ' . ($quote_detail['last_name'] ?? ''))) : ''; ?>'
+    quoteId: <?php echo isset($quote_id) ? (int)$quote_id : 0; ?>,
+    quoteNumber: <?php echo json_encode(isset($quote_detail['quote_number']) ? (string)$quote_detail['quote_number'] : '', JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT); ?>,
+    clientName: <?php echo json_encode(isset($quote_detail) ? (string)($quote_detail['company_name'] ?: trim(($quote_detail['first_name'] ?? '') . ' ' . ($quote_detail['last_name'] ?? ''))) : '', JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT); ?>
 };
 
 document.addEventListener('click', function(event) {
