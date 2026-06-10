@@ -246,7 +246,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
         case 'delete_event':
             $quote_id = (int)$_POST['quote_id'];
             $quote_action = $_POST['quote_action'] ?? '';
-            $confirm_delete = isset($_POST['confirm_delete']) ? 1 : 0;
+            $confirm_delete = !empty($_POST['confirm_delete']);
 
             if (!$confirm_delete) {
                 header("Location: assign_staff.php?quote_id=$quote_id&error=delete_event_failed");
@@ -286,8 +286,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
                     if (empty($file_path)) return;
                     $base_dir = realpath(dirname(__DIR__) . '/uploads');
                     if ($base_dir === false) return;
-                    $relative_path = ltrim((string)$file_path, '/');
-                    if (strpos($relative_path, '..') !== false) {
+                    $relative_path = str_replace('\\', '/', ltrim((string)$file_path, '/'));
+                    $relative_path = rawurldecode($relative_path);
+                    if (strpos($relative_path, "\0") !== false || preg_match('#(^|/)\.\.(/|$)#', $relative_path)) {
                         return;
                     }
                     $real_path = realpath(dirname(__DIR__) . '/' . $relative_path);
@@ -1005,7 +1006,7 @@ include '../includes/header.php';
 
                 <form method="POST" action="assign_staff.php" id="deleteEventForm">
                     <input type="hidden" name="action" value="delete_event">
-                    <input type="hidden" name="quote_id" id="modal_delete_quote_id" value="<?php echo (int)$quote_id; ?>">
+                    <input type="hidden" name="quote_id" id="modal_delete_quote_id" value="">
 
                     <div class="modal-body">
                         <!-- Alert warning -->
