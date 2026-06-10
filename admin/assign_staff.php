@@ -458,17 +458,32 @@ include '../includes/header.php';
     
     <?php if ($quote_detail): ?>
     
-    <div class="mb-3 d-flex justify-content-between align-items-center">
-        <a href="assign_staff.php" class="btn btn-outline-secondary"><i class="bi bi-arrow-left"></i> Torna alla lista</a>
-        <div class="d-flex gap-2 align-items-center">
-            <?php if (!empty($quote_detail['cloned_from'])): ?>
-            <button type="button" class="btn btn-danger" data-bs-toggle="modal" data-bs-target="#deleteEventModal">
-                <i class="bi bi-trash"></i> Elimina Evento
-            </button>
-            <?php endif; ?>
-            <div class="btn-group">
-                <a href="export_pdf_full.php?quote_id=<?php echo $quote_id; ?>" class="btn btn-primary" target="_blank"><i class="bi bi-file-pdf"></i> PDF Intero</a>
-                <a href="export_pdf_okl.php?quote_id=<?php echo $quote_id; ?>" class="btn btn-success" target="_blank"><i class="bi bi-file-pdf"></i> PDF OKL</a>
+    <!-- Toolbar superiore -->
+    <div class="mb-3">
+        <div class="d-flex justify-content-between align-items-center">
+            <a href="assign_staff.php" class="btn btn-outline-secondary">
+                <i class="bi bi-arrow-left"></i> Torna alla lista
+            </a>
+
+            <div class="d-flex gap-2">
+                <?php $is_cloned = !empty($quote_detail['cloned_from']); ?>
+
+                <!-- BOTTONE ELIMINA EVENTO -->
+                <?php if ($is_cloned): ?>
+                <button type="button" class="btn btn-danger"
+                        onclick="openDeleteModal(<?php echo $quote_id; ?>, '<?php echo e($quote_detail['quote_number']); ?>', '<?php echo e($quote_detail['company_name'] ?: trim(($quote_detail['first_name'] ?? '') . ' ' . ($quote_detail['last_name'] ?? ''))); ?>')">
+                    <i class="bi bi-trash"></i> Elimina Evento
+                </button>
+                <?php endif; ?>
+
+                <div class="btn-group">
+                    <a href="export_pdf_full.php?quote_id=<?php echo $quote_id; ?>" class="btn btn-primary" target="_blank">
+                        <i class="bi bi-file-pdf"></i> PDF Intero
+                    </a>
+                    <a href="export_pdf_okl.php?quote_id=<?php echo $quote_id; ?>" class="btn btn-success" target="_blank">
+                        <i class="bi bi-file-pdf"></i> PDF OKL
+                    </a>
+                </div>
             </div>
         </div>
     </div>
@@ -956,59 +971,80 @@ include '../includes/header.php';
     </div>
     <?php endforeach; ?>
     
-    <?php if ($quote_detail && !empty($quote_detail['cloned_from'])): ?>
-    <div class="modal fade" id="deleteEventModal" tabindex="-1" data-bs-backdrop="static">
-        <div class="modal-dialog">
+    <!-- ============================================ -->
+    <!-- MODAL ELIMINA EVENTO CLONATO -->
+    <!-- ============================================ -->
+    <div class="modal fade" id="deleteEventModal" tabindex="-1" aria-labelledby="deleteEventModalLabel" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered">
             <div class="modal-content">
                 <div class="modal-header bg-danger text-white">
-                    <h5 class="modal-title">⚠️ Conferma Eliminazione Evento</h5>
-                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                    <h5 class="modal-title" id="deleteEventModalLabel">
+                        <i class="bi bi-exclamation-triangle-fill"></i> Conferma Eliminazione Evento
+                    </h5>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
                 </div>
-                <form method="POST" action="assign_staff.php">
+
+                <form method="POST" action="assign_staff.php" id="deleteEventForm">
                     <input type="hidden" name="action" value="delete_event">
-                    <input type="hidden" name="quote_id" value="<?php echo $quote_id; ?>">
+                    <input type="hidden" name="quote_id" id="modal_quote_id" value="">
+
                     <div class="modal-body">
-                        <div class="alert alert-warning">
+                        <!-- Alert warning -->
+                        <div class="alert alert-danger mb-3">
                             <i class="bi bi-exclamation-triangle"></i>
-                            <strong>Attenzione!</strong> Questa operazione è irreversibile e rimuoverà definitivamente l'evento clonato.
+                            <strong>ATTENZIONE!</strong> Questa azione eliminerà l'evento e tutti i dati associati (staff, servizi, media, ecc.).
                         </div>
-                        <div class="border rounded p-3 bg-light mb-3">
-                            <div><strong>Numero preventivo:</strong> <?php echo e($quote_detail['quote_number']); ?></div>
-                            <div><strong>Cliente:</strong> <?php echo e($quote_detail['company_name'] ?: trim(($quote_detail['first_name'] ?? '') . ' ' . ($quote_detail['last_name'] ?? ''))); ?></div>
+
+                        <!-- Info evento -->
+                        <div class="bg-light p-3 rounded mb-3">
+                            <p class="mb-1"><strong>Preventivo:</strong> <span id="modal_quote_number"></span></p>
+                            <p class="mb-0"><strong>Cliente:</strong> <span id="modal_client_name"></span></p>
                         </div>
-                        <div class="mb-3">
-                            <label class="form-label fw-bold">Gestione preventivo associato</label>
-                            <div class="form-check mb-2">
-                                <input class="form-check-input" type="radio" name="quote_action" id="deleteQuoteActionDelete" value="delete" checked>
-                                <label class="form-check-label" for="deleteQuoteActionDelete">
-                                    <strong>Elimina anche il preventivo</strong>
-                                </label>
-                            </div>
-                            <div class="form-check">
-                                <input class="form-check-input" type="radio" name="quote_action" id="deleteQuoteActionReject" value="reject">
-                                <label class="form-check-label" for="deleteQuoteActionReject">
-                                    <strong>Imposta preventivo come "Rifiutato"</strong>
-                                </label>
-                            </div>
+
+                        <hr>
+
+                        <!-- Opzioni gestione preventivo -->
+                        <p class="fw-bold mb-2">Cosa vuoi fare con il preventivo originale?</p>
+
+                        <div class="form-check mb-2">
+                            <input class="form-check-input" type="radio" name="quote_action" id="quoteActionDelete" value="delete" checked>
+                            <label class="form-check-label" for="quoteActionDelete">
+                                <strong><i class="bi bi-trash text-danger"></i> Elimina anche il preventivo</strong><br>
+                                <small class="text-muted">Il preventivo verrà cancellato definitivamente dal database</small>
+                            </label>
                         </div>
+
+                        <div class="form-check mb-3">
+                            <input class="form-check-input" type="radio" name="quote_action" id="quoteActionReject" value="reject">
+                            <label class="form-check-label" for="quoteActionReject">
+                                <strong><i class="bi bi-x-circle text-warning"></i> Imposta preventivo come "Rifiutato"</strong><br>
+                                <small class="text-muted">Il preventivo rimarrà nel sistema ma con stato "Rifiutato"</small>
+                            </label>
+                        </div>
+
+                        <hr>
+
+                        <!-- Checkbox conferma finale -->
                         <div class="form-check">
-                            <input class="form-check-input" type="checkbox" id="confirmDeleteCloned" required>
-                            <label class="form-check-label fw-bold" for="confirmDeleteCloned">
+                            <input class="form-check-input" type="checkbox" id="confirmDeleteCheck">
+                            <label class="form-check-label fw-bold text-danger" for="confirmDeleteCheck">
                                 Confermo di voler eliminare questo evento
                             </label>
                         </div>
                     </div>
+
                     <div class="modal-footer">
-                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Annulla</button>
-                        <button type="submit" class="btn btn-danger" id="confirmDeleteClonedBtn" disabled>
-                            <i class="bi bi-trash"></i> Elimina Evento
+                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
+                            <i class="bi bi-x"></i> Annulla
+                        </button>
+                        <button type="submit" class="btn btn-danger" id="confirmDeleteBtn" disabled>
+                            <i class="bi bi-trash-fill"></i> ELIMINA EVENTO
                         </button>
                     </div>
                 </form>
             </div>
         </div>
     </div>
-    <?php endif; ?>
 
     <?php endif; ?>
 </div>
@@ -1098,28 +1134,53 @@ async function uploadMedia(e, quoteItemId, quoteId) {
     setTimeout(() => location.reload(), 1000);
 }
 
+// ============================================
+// GESTIONE MODAL ELIMINA EVENTO
+// ============================================
+function openDeleteModal(quoteId, quoteNumber, clientName) {
+    // Popola i campi del modal
+    document.getElementById('modal_quote_id').value = quoteId;
+    document.getElementById('modal_quote_number').textContent = quoteNumber;
+    document.getElementById('modal_client_name').textContent = clientName;
+
+    // Reset checkbox e bottone
+    document.getElementById('confirmDeleteCheck').checked = false;
+    document.getElementById('confirmDeleteBtn').disabled = true;
+
+    // Reset radio buttons
+    document.getElementById('quoteActionDelete').checked = true;
+
+    // Apri modal
+    var modal = new bootstrap.Modal(document.getElementById('deleteEventModal'));
+    modal.show();
+}
+
 document.addEventListener('DOMContentLoaded', function() {
+    // Checkbox conferma eliminazione
+    const confirmDeleteCheck = document.getElementById('confirmDeleteCheck');
+    const confirmDeleteBtn = document.getElementById('confirmDeleteBtn');
+    if (confirmDeleteCheck && confirmDeleteBtn) {
+        confirmDeleteCheck.addEventListener('change', function() {
+            confirmDeleteBtn.disabled = !this.checked;
+        });
+    }
+
+    // Reset stato modal all'apertura tramite bootstrap
+    const deleteEventModal = document.getElementById('deleteEventModal');
+    if (deleteEventModal) {
+        deleteEventModal.addEventListener('hidden.bs.modal', function() {
+            if (confirmDeleteCheck) confirmDeleteCheck.checked = false;
+            if (confirmDeleteBtn) confirmDeleteBtn.disabled = true;
+        });
+    }
+
     const noCommCheck = document.getElementById('noCommissionCheck');
     const commInput = document.getElementById('commissionInput');
     const commType = document.getElementById('commissionTypeSelect');
-    const confirmCheck = document.getElementById('confirmDeleteCloned');
-    const confirmBtn = document.getElementById('confirmDeleteClonedBtn');
-    const deleteEventModal = document.getElementById('deleteEventModal');
     if(noCommCheck) {
         noCommCheck.addEventListener('change', function() {
             if(this.checked) { commInput.disabled = true; commType.disabled = true; commInput.value = '0.00'; } 
             else { commInput.disabled = false; commType.disabled = false; }
-        });
-    }
-    if (confirmCheck && confirmBtn) {
-        confirmCheck.addEventListener('change', function() {
-            confirmBtn.disabled = !this.checked;
-        });
-    }
-    if (deleteEventModal && confirmCheck && confirmBtn) {
-        deleteEventModal.addEventListener('hidden.bs.modal', function() {
-            confirmCheck.checked = false;
-            confirmBtn.disabled = true;
         });
     }
     document.querySelectorAll('input[name*="[cost]"], input[name*="[extra]"]').forEach(input => {
