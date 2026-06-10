@@ -1104,6 +1104,7 @@ document.addEventListener('DOMContentLoaded', function() {
     const commType = document.getElementById('commissionTypeSelect');
     const confirmCheck = document.getElementById('confirmDeleteCloned');
     const confirmBtn = document.getElementById('confirmDeleteClonedBtn');
+    const deleteEventModal = document.getElementById('deleteEventModal');
     if(noCommCheck) {
         noCommCheck.addEventListener('change', function() {
             if(this.checked) { commInput.disabled = true; commType.disabled = true; commInput.value = '0.00'; } 
@@ -1113,6 +1114,12 @@ document.addEventListener('DOMContentLoaded', function() {
     if (confirmCheck && confirmBtn) {
         confirmCheck.addEventListener('change', function() {
             confirmBtn.disabled = !this.checked;
+        });
+    }
+    if (deleteEventModal && confirmCheck && confirmBtn) {
+        deleteEventModal.addEventListener('hidden.bs.modal', function() {
+            confirmCheck.checked = false;
+            confirmBtn.disabled = true;
         });
     }
     document.querySelectorAll('input[name*="[cost]"], input[name*="[extra]"]').forEach(input => {
