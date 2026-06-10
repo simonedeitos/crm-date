@@ -287,7 +287,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
                     $base_dir = realpath(dirname(__DIR__) . '/uploads');
                     if ($base_dir === false) return;
                     $relative_path = ltrim((string)$file_path, '/');
-                    for ($i = 0; $i < 3; $i++) {
+                    for ($i = 0; $i < 10; $i++) {
                         $decoded_path = rawurldecode($relative_path);
                         if ($decoded_path === $relative_path) {
                             break;
