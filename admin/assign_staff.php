@@ -1034,7 +1034,7 @@ include '../includes/header.php';
                         </div>
 
                         <div class="form-check mb-3">
-                            <input class="form-check-input" type="radio" name="quote_action" id="quoteActionReject" value="reject" required>
+                            <input class="form-check-input" type="radio" name="quote_action" id="quoteActionReject" value="reject">
                             <label class="form-check-label" for="quoteActionReject">
                                 <strong><i class="bi bi-x-circle text-warning"></i> Imposta preventivo come "Rifiutato"</strong><br>
                                 <small class="text-muted">Il preventivo rimarrà nel sistema ma con stato "Rifiutato"</small>
